@@ -1,4 +1,4 @@
-"""Command line: python -m collector {crawl,status,manifest,snapshot}"""
+"""Command line: python -m collector {check,crawl,status,manifest,snapshot}"""
 
 from __future__ import annotations
 
@@ -22,8 +22,17 @@ def main(argv: list[str] | None = None) -> int:
     warnings.filterwarnings("ignore", module="requests")  # noisy urllib3/chardet version warning
 
     ap = argparse.ArgumentParser(prog="collector", description="Crawl a site and download its documents.")
-    ap.add_argument("-c", "--config", default="config.toml", help="config file (default: config.toml)")
+    ap.add_argument("-c", "--config", help="config file (default: config.toml)")
     sub = ap.add_subparsers(dest="command", required=True)
+
+    check = sub.add_parser("check", help="check whether a site can be crawled, and suggest its config")
+    check.add_argument("url", help="the page to start from, e.g. the site's home or documents page")
+    check.add_argument("--pages", type=int, default=10,
+                       help="pages to read, the start page included (default: 10)")
+    check.add_argument("--delay", type=float,
+                       help="seconds between requests (default: the config's, 1 s without -c)")
+    check.add_argument("--write", metavar="FILE",
+                       help="save the suggested config to FILE (a new file; not with -c)")
 
     crawl = sub.add_parser("crawl", help="crawl and download (resumes where the last run stopped)")
     crawl.add_argument("--workers", type=int, help="parallel downloads (overrides config)")
@@ -43,7 +52,9 @@ def main(argv: list[str] | None = None) -> int:
     snap.add_argument("output", help="file to write, e.g. collector-state.db")
 
     args = ap.parse_args(argv)
-    cfg = load_config(args.config)
+    if args.command == "check":
+        return _check(args)
+    cfg = load_config(args.config or "config.toml")
     store = Store(cfg.db_path)
     try:
         if args.command == "crawl":
@@ -106,6 +117,34 @@ def _crawl(args, cfg, store) -> int:
 
 def _interrupt(signum, frame):
     raise KeyboardInterrupt
+
+
+def _check(args) -> int:
+    """Exit code: 0 ready to crawl, 2 crawlable but needs attention, 1 not crawlable as it is."""
+    from . import check
+
+    if args.write and args.config:
+        print("--write makes a config for a new site; it can't be combined with -c.")
+        return 1
+    cfg = load_config(args.config) if args.config else None
+    print(f"Checking {args.url} (up to {args.pages} pages)...", flush=True)
+    try:
+        rep = check.run(args.url, cfg, pages=args.pages, delay=args.delay)
+    except ValueError as e:
+        print(e)
+        return 1
+    print(check.format_report(rep))
+    if args.write:
+        if rep.exit_code == 1:
+            print(f"\nNot writing {args.write}: the site can't be crawled as it is.")
+        else:
+            try:
+                print(f"\nWrote {check.write_config(rep, args.write)}. "
+                      f"Next: python -m collector -c {args.write} crawl --limit 50")
+            except FileExistsError as e:
+                print(f"\n{e}")
+                return 1
+    return rep.exit_code
 
 
 def _status(store) -> int:

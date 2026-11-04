@@ -1,5 +1,7 @@
 # แม่แบบการตั้งค่า collectorBot สำหรับเว็บไซต์ใหม่
 #
+# ให้บอทตรวจเว็บและสร้างไฟล์นี้ให้ได้:  python -m collector check https://www.example.go.th/ --write mysite.toml
+# หรือทำเอง:
 #   1. คัดลอกไฟล์นี้เป็นชื่อใหม่ เช่น  mysite.toml
 #   2. แก้ค่าที่มีเครื่องหมาย  ← แก้
 #   3. ทดลองรันสั้น ๆ:   python -m collector -c mysite.toml crawl --limit 50

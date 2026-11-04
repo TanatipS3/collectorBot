@@ -260,6 +260,13 @@ class Robots:
         delay = self._entry(url)[0].crawl_delay(self.user_agent)
         return float(delay) if delay else None
 
+    def describe(self, url: str) -> str:
+        """What the host's robots.txt is: found, missing, or the problem that disallows everything."""
+        rp, reason = self._entry(url)
+        if rp.disallow_all:
+            return f"{reason}: the whole host is disallowed"
+        return "none (everything allowed)" if rp.allow_all else "found"
+
     def _entry(self, url: str) -> tuple[RobotFileParser, str]:
         origin = _origin(url)
         with self.lock:

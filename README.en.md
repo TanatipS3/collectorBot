@@ -20,6 +20,7 @@ says `python`). To run it on a server, see [Running on a Linux server](#running-
 ## Use
 
 ```powershell
+python -m collector check https://www.example.org/   # can this site be crawled? suggests a config
 python -m collector crawl                 # start, or resume where the last run stopped
 python -m collector crawl --limit 50      # quick test: stop after 50 requests
 python -m collector status                # progress counts and recent errors
@@ -97,12 +98,22 @@ in `config.toml`, and `?dl=` links by `crawl_host_download_patterns`.
 
 ### Another site
 
-1. Copy `config.example.toml` to `mysite.toml`. Set `start_urls`, `crawl_hosts`, `file_hosts`,
-   `exclude`, and an `output_dir`/`state_dir` of its own.
+1. `python -m collector check https://www.example.org/ --write mysite.toml` reads the start page
+   and a few pages it links to (10 by default, `--pages N`; 1 s apart; robots.txt obeyed; pages
+   whose URL suggests documents first). It reports the documents linked, documents opened by
+   JavaScript instead (with the code, for `link_rules`), a JavaScript application whose HTML is an
+   empty shell, bot protection, robots.txt, `__doPostBack` paging, login forms and URL families
+   worth excluding. Then a verdict, with the exit code: `READY` (0); `NEEDS LINK RULES` or
+   `NO DOCUMENTS YET` (2); `NO LINKS`, `JAVASCRIPT APP`, `BLOCKED`, `NOT A PAGE` or
+   `UNREACHABLE` (1). `--write` saves the suggested config, filled into `config.example.toml`
+   (never over an existing file, nor for a site that can't be crawled). Without it, copy
+   `config.example.toml` and set `start_urls`, `crawl_hosts`, `file_hosts`, `exclude`, and an
+   `output_dir`/`state_dir` of its own.
 2. `python -m collector -c mysite.toml crawl --limit 50`, then `status` and the log: add an
    `exclude` regex for every endless or useless URL family (calendars, sort orders, searches).
 3. Documents opened by JavaScript: a `link_rules` entry. Anything a regex can't describe: a
-   module in `collector/sites/` (copy `senate.py`), selected with `site`.
+   module in `collector/sites/` (copy `senate.py`), selected with `site`. Check the result with
+   `python -m collector -c mysite.toml check <url>`, which uses the config's rules.
 
 Sites that build their pages in the browser (React, Vue, Angular), need a login, or page with
 POST forms are out of reach: the crawler reads the HTML the server sends and follows GET links.
@@ -337,6 +348,7 @@ off at the token limit keeps its flags. Then it rewrites the changed documents' 
 - `collector/crawler.py`: crawl loop, rate limiting, robots, redirects, downloads
 - `collector/urls.py`: URL normalization, scope rules, link extraction
 - `collector/config.py`: the settings and their defaults (file types, download patterns)
+- `collector/check.py`: `check`, the pre-crawl look at a site, and the config it suggests
 - `collector/sites/`: site rules; `senate.py` holds senate.go.th's link quirks
 - `collector/saver.py`: file names and on-disk layout
 - `collector/store.py`: SQLite state (`state/collector.db`), which makes runs resumable

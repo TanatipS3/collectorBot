@@ -42,6 +42,7 @@ pip install -r requirements.txt
 
 | คำสั่ง | ทำอะไร |
 |---|---|
+| `python -m collector check <url>` | ตรวจว่าเว็บนี้เก็บได้ไหม และเสนอไฟล์ตั้งค่า (`--write mysite.toml` บันทึกให้) |
 | `python -m collector crawl` | เริ่มเก็บ หรือทำต่อจากรอบที่แล้ว |
 | `python -m collector crawl --limit 50` | ทดลอง: หยุดหลังส่งคำขอครบ 50 ครั้ง |
 | `python -m collector status` | ดูความคืบหน้าและข้อผิดพลาดล่าสุด (เปิดดูได้ขณะบอทกำลังทำงาน) |
@@ -65,24 +66,87 @@ python -m collector -c mysite.toml manifest -o mysite.csv
 
 ## ใช้กับเว็บไซต์อื่น
 
-### 0. ตรวจก่อนว่าเว็บนั้นเก็บได้ไหม
+### 0. ให้บอทตรวจเว็บก่อน (`check`)
 
-บอทอ่าน HTML ที่เซิร์ฟเวอร์ส่งมาให้ ไม่ได้รัน JavaScript แบบเบราว์เซอร์ ให้เปิดหน้าที่มีเอกสารในเบราว์เซอร์
-กด **Ctrl+U** (ดูซอร์สของหน้า) แล้วค้นคำว่า `.pdf`
+```bash
+python -m collector check https://www.example.go.th/ --write mysite.toml
+```
 
-- **เจอลิงก์เอกสาร** เช่น `<a href="/files/report.pdf">`: เก็บได้ ทำขั้นต่อไปได้เลย
-- **เจอเป็นการเรียก JavaScript** เช่น `onclick="openDoc(42,'report.pdf')"`: เก็บได้ โดยเพิ่ม `link_rules` (ขั้นที่ 4)
-- **ไม่เจออะไรเลย** หน้าว่างแล้วเนื้อหาค่อยโหลดตามมา: เว็บสร้างหน้าด้วย JavaScript เก็บตรง ๆ ไม่ได้ (ดู[ข้อจำกัด](#ข้อจำกัด))
+บอทอ่าน HTML ที่เซิร์ฟเวอร์ส่งมาให้ ไม่ได้รัน JavaScript แบบเบราว์เซอร์ คำสั่ง `check` จึงตรวจให้ว่าเว็บนั้นเก็บได้ไหม
+โดยอ่านหน้าเริ่มต้นและหน้าที่ลิงก์ต่อไปอีกไม่กี่หน้า (ค่าเริ่มต้นรวม 10 หน้า ห่างกัน 1 วินาที และทำตาม robots.txt)
+หน้าที่ URL มีคำอย่าง download, document, เอกสาร, ดาวน์โหลด, รายงาน, ประกาศ จะถูกอ่านก่อน แล้วรายงานว่า:
 
-### 1. สร้างไฟล์ตั้งค่า
+- เจอเอกสารกี่ไฟล์ อยู่บนโฮสต์ไหนบ้าง (ลิงก์ไม่มีนามสกุลอย่าง `?id=5` ก็ถูกเปิดดูว่าเป็นไฟล์จริงไหม)
+- เอกสารที่ถูกเปิดด้วย JavaScript ซึ่งบอทมองไม่เห็น พร้อมโค้ดตัวอย่างจากหน้าเว็บ ไว้เขียน `link_rules`
+- เว็บเป็นแอป JavaScript หรือเปล่า (HTML เป็นโครงว่าง เช่น `<div id="root"></div>` ของ React)
+- ถูกกันไว้หรือเปล่า: robots.txt ห้าม, ระบบกันบอท (เช่นหน้า "Just a moment..." ของ Cloudflare), HTTP error
+- การแบ่งหน้าด้วยการส่งฟอร์ม (`__doPostBack` ของ ASP.NET) และฟอร์มล็อกอิน
+- URL ที่ควรใส่ใน `exclude` (เช่น การเรียงลำดับ `?sort=`, หน้าพิมพ์)
+- ไฟล์ตั้งค่าเริ่มต้นสำหรับเว็บนั้น
+
+`--write mysite.toml` บันทึกไฟล์ตั้งค่านั้นให้เลย (เติมค่าของเว็บลงใน `config.example.toml`) โดยไม่เขียนทับไฟล์ที่มีอยู่แล้ว
+และไม่เขียนถ้าผลบอกว่าเก็บไม่ได้ ใช้ `--pages 30` ถ้าอยากให้อ่านมากขึ้น
+
+ตัวอย่างผลจากเว็บวุฒิสภา (`--pages 5`):
+
+```
+Checked https://www.senate.go.th/
+robots.txt: found
+Read 5 page(s), 1 s apart:
+
+  status  docs  page
+     200     4  https://www.senate.go.th/  (redirected to https://www.senate.go.th/view/1/หน้าแรก/TH-TH)
+     200     0  https://www.senate.go.th/book_shelf  (redirected to https://www.senate.go.th/book_shelf/)
+     200     0  https://www.senate.go.th/book_shelf/
+     200    53  https://www.senate.go.th/view/1/คำรับรองและรายงานผลการปฏิบัติราชการ/TH-TH
+     200     7  https://www.senate.go.th/view/1/ดาวน์โหลดแบบฟอร์ม/TH-TH
+
+Links found: 62 documents, 179 pages on the site to crawl, 0 excluded, 117 to other sites.
+     62  www.senate.go.th   e.g. https://www.senate.go.th/assets/portals/1/files/แบบรับรองกรรมาธิการ สว.pdf
+
+Verdict: READY. The crawler can collect this site: 62 document link(s) in 5 page(s) read.
+
+Starting config (--write <file>.toml saves it, filled into config.example.toml):
+  start_urls = ["https://www.senate.go.th/view/1/%E0%B8%AB%E0%B8%99%E0%B9%89%E0%B8%B2%E0%B9%81%E0%B8%A3%E0%B8%81/TH-TH"]
+  crawl_hosts = ["www.senate.go.th"]
+  file_hosts = ["www.senate.go.th"]
+  exclude = ['/search', '[?&](q|keyword|search)=', '/login', 'logout']
+  output_dir = "downloads_senate_go_th"
+  state_dir = "state_senate_go_th"
+```
+
+**ผลตัดสิน (`Verdict`)**
+
+| ผลตัดสิน | ความหมาย | ทำอะไรต่อ | exit code |
+|---|---|---|---|
+| `READY` | เจอเอกสารเป็นลิงก์ปกติ | ทดลองรัน (ขั้นที่ 2) | 0 |
+| `NEEDS LINK RULES` | เอกสารถูกเปิดด้วย JavaScript ไม่ใช่ลิงก์ | เพิ่ม `link_rules` (ขั้นที่ 3) แล้ว `check` ใหม่ด้วย `-c` | 2 |
+| `NO DOCUMENTS YET` | มีหน้าให้ไล่ต่อ แต่ยังไม่เจอเอกสารในหน้าที่อ่าน | ใช้ `--pages 50` หรือเริ่มจากหน้ารวมเอกสาร/ดาวน์โหลด | 2 |
+| `NO LINKS` | หน้าเริ่มต้นไม่มีลิงก์ที่ตามได้ | ลองหน้าอื่น ถ้าในเบราว์เซอร์เห็นลิงก์ แปลว่าหน้าสร้างลิงก์ด้วย JavaScript | 1 |
+| `JAVASCRIPT APP` | HTML เป็นโครงว่าง เนื้อหามาจากสคริปต์ | เก็บตรง ๆ ไม่ได้ (ดู[ข้อจำกัด](#ข้อจำกัด)) | 1 |
+| `BLOCKED` | robots.txt ห้าม, ระบบกันบอท หรือ HTTP error | เก็บไม่ได้ | 1 |
+| `NOT A PAGE` | URL เริ่มต้นเป็นไฟล์ ไม่ใช่หน้าเว็บ | ใช้หน้าที่ลิงก์ไปหาไฟล์นั้น | 1 |
+| `UNREACHABLE` | ติดต่อเซิร์ฟเวอร์ไม่ได้ | ตรวจ URL, อินเทอร์เน็ต, VPN | 1 |
+
+ส่วน `Notes` บอกเรื่องที่ไม่ถึงกับทำให้เก็บไม่ได้ เช่น โฮสต์ที่ redirect ไป, การแบ่งหน้าแบบส่งฟอร์ม, ฟอร์มล็อกอิน,
+`Crawl-delay` ใน robots.txt, เอกสารบางส่วนที่ถูกเปิดด้วย JavaScript
+
+`check` ใช้กับไฟล์ตั้งค่าที่มีอยู่ได้ด้วย (`-c` ก่อนคำว่า `check`) เพื่อดูว่า `exclude`, `link_rules` หรือ `site` ที่แก้ไว้ได้ผลไหม:
+
+```bash
+python -m collector -c mysite.toml check https://www.example.go.th/
+```
+
+### 1. ตรวจไฟล์ตั้งค่า
+
+ถ้าใช้ `--write` ไฟล์ตั้งค่าจะถูกสร้างให้แล้ว ถ้าไม่ได้ใช้ ให้คัดลอกแม่แบบเอง:
 
 ```bash
 cp config.example.toml mysite.toml        # Windows: copy config.example.toml mysite.toml
 ```
 
-### 2. แก้ค่าหลัก
-
-ค่าที่ต้องแก้มีแค่นี้ ในไฟล์มีเครื่องหมาย `← แก้` กำกับไว้:
+ค่าหลักมีแค่นี้ ในไฟล์มีเครื่องหมาย `← แก้` กำกับไว้ ถ้าไฟล์มาจาก `--write` ให้ดู `file_hosts` อีกครั้ง
+เพราะโฮสต์อื่นทุกโฮสต์ที่มีเอกสารถูกใส่ไว้ บางโฮสต์อาจเป็นเว็บอื่นที่ไม่ต้องการ:
 
 ```toml
 start_urls  = ["https://www.example.go.th/", "https://www.example.go.th/download"]
@@ -93,7 +157,7 @@ output_dir  = "downloads_mysite"                      # แยกโฟลเด
 state_dir   = "state_mysite"
 ```
 
-### 3. ทดลองรันสั้น ๆ แล้วดูผล
+### 2. ทดลองรันสั้น ๆ แล้วดูผล
 
 ```bash
 python -m collector -c mysite.toml crawl --limit 50
@@ -106,9 +170,10 @@ URL ที่ค้างอยู่ในคิวจะถูกจัดใ�
 
 ถ้าอยากเริ่มใหม่ทั้งหมด ให้ลบโฟลเดอร์ `state_dir` (และ `output_dir` ถ้าไม่ต้องการไฟล์เดิม)
 
-### 4. ถ้าเอกสารถูกเปิดด้วย JavaScript
+### 3. ถ้าเอกสารถูกเปิดด้วย JavaScript
 
-ถ้าเขียนรูปแบบเป็น regex ได้ ให้ใช้ `link_rules` ในไฟล์ตั้งค่า ไม่ต้องแก้โค้ด:
+`check` แสดงโค้ดที่เปิดเอกสารไว้ใต้หัวข้อ `Opened by JavaScript` ถ้าเขียนรูปแบบเป็น regex ได้ ให้ใช้ `link_rules`
+ในไฟล์ตั้งค่า ไม่ต้องแก้โค้ด แล้วสั่ง `python -m collector -c mysite.toml check <url>` อีกครั้งเพื่อดูว่าเจอเอกสารแล้ว:
 
 ```toml
 link_rules = [
@@ -123,7 +188,7 @@ link_rules = [
 
 ถ้าซับซ้อนเกินกว่า regex เช่น ต้องอ่านค่าจากอีกส่วนของหน้า หรือต้องสร้างเลขหน้าเอง ให้เขียน[กฎเฉพาะเว็บ](#กฎเฉพาะเว็บ-collectorsites)เป็น Python
 
-### 5. รันจริง
+### 4. รันจริง
 
 ```bash
 python -m collector -c mysite.toml crawl
@@ -431,7 +496,8 @@ tail -f state/collector.log                                    # ดู log
 
 | ไฟล์ | หน้าที่ |
 |---|---|
-| `collector/__main__.py` | คำสั่ง `crawl`, `status`, `manifest`, `snapshot` |
+| `collector/__main__.py` | คำสั่ง `check`, `crawl`, `status`, `manifest`, `snapshot` |
+| `collector/check.py` | คำสั่ง `check`: ตรวจเว็บก่อนเก็บ และเขียนไฟล์ตั้งค่าเริ่มต้น |
 | `collector/config.py` | อ่านไฟล์ตั้งค่า, ค่าเริ่มต้น, ชนิดไฟล์ที่เก็บ |
 | `collector/urls.py` | แปลง URL เป็นรูปมาตรฐาน, แยกประเภท URL, ดึงลิงก์จากหน้า |
 | `collector/crawler.py` | วงรอบการเก็บ, คุมจังหวะ, robots.txt, redirect, ดาวน์โหลด |
@@ -446,7 +512,9 @@ python -m pytest
 ```
 
 `tests/test_crawl.py` รันบอทจริงกับเว็บปลอมในเครื่องที่จำลองลักษณะแปลก ๆ ของเว็บจริง (redirect, ไฟล์ไม่บอกชนิด, robots.txt,
-เซิร์ฟเวอร์ล่ม, ถูกบล็อก) ส่วน `tests/test_urls.py` และ `tests/test_config.py` ทดสอบการแยก URL การดึงลิงก์ และไฟล์ตั้งค่า
+เซิร์ฟเวอร์ล่ม, ถูกบล็อก) `tests/test_check.py` รัน `check` กับเว็บปลอมแบบต่าง ๆ (ลิงก์ปกติ, แอป JavaScript,
+เอกสารที่เปิดด้วย JavaScript, `__doPostBack`, robots.txt, ระบบกันบอท) ส่วน `tests/test_urls.py` และ `tests/test_config.py`
+ทดสอบการแยก URL การดึงลิงก์ และไฟล์ตั้งค่า
 
 ## OCR และการจัดหมวดเอกสาร
 
