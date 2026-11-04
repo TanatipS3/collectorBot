@@ -1,0 +1,28 @@
+# Settings for `python -m ocr` (OCR of what the crawl downloaded).
+
+# Input: the crawl's state database (which URL each file came from) and the files themselves.
+collector_db = "state/collector.db"
+downloads_dir = "downloads"
+# Output: text/<doc_id>.md per document, mapping.csv, and the OCR state (ocr.db, ocr.log).
+output_dir = "ocr_out"
+
+# The OCR engine: the vision model served on pgx. TOKENMIND_OCR_BASE_URL and TOKENMIND_OCR_MODEL
+# override these if set. (Containers reach it as host.docker.internal; on the host it is localhost.)
+primary_url = "http://localhost:8001/v1"
+primary_model = "ptm-llm-vision-3.0.0-preview"
+primary_key_env = ""
+
+# Backup, used for a page only when the primary is down or refuses it. The key is read from
+# TOKENMIND_API_KEY in the environment or in .env (not in git). backup_url = "" turns it off.
+backup_url = "https://tokenmind.pathumma.in.th/v1"
+backup_model = "ocr/olmocr"
+backup_key_env = "TOKENMIND_API_KEY"
+
+workers = 8          # OCR requests in flight at once to the primary (the vision server runs at most 8)
+backup_workers = 12  # pages TokenMind reads at once as a second engine (0 = fallback only)
+processes = 8        # processes reading PDFs and rendering pages (pgx has 20 cores)
+render_px = 1600     # longer side of the page image sent to the model, in pixels
+max_tokens = 4096    # per page; a dense Thai page took about 1,000; image + this must fit in 8,192
+timeout = 300        # seconds for one OCR request
+attempts = 3         # tries per engine for one page
+max_page_attempts = 3  # runs that retry a page that failed

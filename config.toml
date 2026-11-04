@@ -1,0 +1,66 @@
+# collectorBot settings for www.senate.go.th (Thai Senate).
+
+start_urls = [
+    "https://www.senate.go.th/view/1/%E0%B8%AB%E0%B8%99%E0%B9%89%E0%B8%B2%E0%B9%81%E0%B8%A3%E0%B8%81/TH-TH",
+    "https://www.senate.go.th/view/1/ebook_law/TH-TH",
+    "https://www.senate.go.th/view/1/bookshelf_law/TH-TH",
+    "https://document.senate.go.th/",
+]
+
+# HTML pages on these hosts are crawled for links.
+# Other senate subdomains (lis., library., datacatalog.) are separate systems with
+# thousands of pages each; add them here to crawl them too.
+crawl_hosts = ["www.senate.go.th", "document.senate.go.th"]
+
+# Documents linked from crawled pages are downloaded if they live on one of these hosts.
+# pis.parliament.go.th serves the bill/legislation files the Senate homepage links to.
+file_hosts = ["*.senate.go.th", "pis.parliament.go.th"]
+
+# URLs matching any of these regexes are never fetched (search boxes, click counters,
+# chatbot, login, AJAX endpoints that would only waste requests).
+exclude = [
+    'search_module', 'search_result', '/search', '[?&](key|keyword|search_text|q)=',
+    'chatbot', 'addclick', 'getNewcsrf', 'banner_module', 'ajax_month', 'getLinkMeeting',
+    '/analytics/', 'webmail', '/login', 'logout', 'rongtook',
+    # The language switcher's links (.../English, .../中文, .../Français) all answer HTTP 500.
+    '/(English|%E4%B8%AD%E6%96%87|Fran%C3%A7ais)$',
+    # Documents "under" a /view/ page are file names from scripts mistaken for paths by older
+    # versions; all of them answer HTTP 500. The real files are under /assets/portals/.
+    '^https://www\.senate\.go\.th/view/[^?]+\.(pdf|docx?|xlsx?|pptx?)$',
+    # Committee meeting schedules (กำหนดการประชุม, one page per meeting: ...?cid=1841&ctype=1&dt=33983).
+    # Their only documents are "เอกสารแนบ" buttons the site has disabled; the links answer 404.
+    '[?&]dt=\d', '/commission_meeting/readfile/',
+    # Uncomment to also skip the working English/Chinese/French copies of the site:
+    # '/(EN-US|CN-CN|FR-FR)(/|$)',
+]
+
+# Link quirks of senate.go.th that need code (collector/sites/senate.py): "/?&page41=2" pagination,
+# showFileName(...) news attachments, the e-book viewer's <li key="pdf_url">, JavaScript procurement
+# pagers, and file links written without their leading slash. Without this line those are missed.
+site = "senate"
+
+# "?dl=6094&type=4" on www.senate.go.th always redirects to a PDF: queue it as a download, so it
+# waits for a download slot instead of holding a page slot.
+crawl_host_download_patterns = ['[?&]dl=\d']
+
+output_dir = "downloads"
+state_dir = "state"
+
+# Politeness. Each server gets at most `max_per_host` open downloads plus `pages_per_host`
+# page requests, started `delay` seconds apart. When a server struggles (429/5xx/timeouts)
+# the gap doubles, up to `max_delay`, and Retry-After is obeyed. A server that keeps
+# failing is paused (5, 10, 20, 30 min) and then left alone for the rest of the run.
+# The values below (6 connections, 0.25 s apart) are on the fast side; the safe defaults
+# are 2 + 1 connections, 1 s apart.
+workers = 6          # parallel downloads (across all hosts)
+delay = 0.25         # normal seconds between two requests to the same host
+max_per_host = 4     # downloads open at once to one server
+pages_per_host = 2   # page requests open at once to one server, on top of the downloads
+max_delay = 60
+timeout = 60         # seconds to wait for a server response
+max_retries = 3
+max_file_mb = 0      # skip files bigger than this; 0 = no limit
+
+# robots.txt on www.senate.go.th disallows /document/ (the flip-book viewer behind
+# /book_shelf/). Those URLs are recorded as "blocked" instead of fetched.
+respect_robots = true

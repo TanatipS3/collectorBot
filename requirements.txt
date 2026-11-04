@@ -1,0 +1,6 @@
+requests>=2.31
+beautifulsoup4>=4.12
+lxml>=5.0
+pymupdf>=1.24.3
+tomli>=2.0; python_version < "3.11"
+pytest>=8.0

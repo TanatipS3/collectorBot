@@ -1,0 +1,11 @@
+[project]
+name = "collectorbot"
+version = "0.1.0"
+description = "Crawl a website and download every document it links to."
+requires-python = ">=3.10"
+dependencies = ["requests>=2.31", "beautifulsoup4>=4.12", "lxml>=5.0", "pymupdf>=1.24.3", "tomli>=2.0; python_version < '3.11'"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+filterwarnings = ["ignore::Warning:requests"]
